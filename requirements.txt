@@ -1,0 +1,15 @@
+# Core LangGraph / LangChain stack
+langgraph>=0.2.0
+langchain>=0.3.0
+langchain-core>=0.3.0
+langchain-google-genai>=2.0.0
+
+# Load GOOGLE_API_KEY from a local .env file
+python-dotenv>=1.0.0
+
+# Optional: Streamlit UI (run streamlit_app.py)
+streamlit>=1.30.0
+
+# Jupyter notebook support
+jupyter>=1.0.0
+ipykernel>=6.0.0
