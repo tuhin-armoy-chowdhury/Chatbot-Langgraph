@@ -1,93 +1,79 @@
-# 💬 LangGraph + Gemini Chatbot
+# LangGraph Gemini Chatbot
 
-hey! so this is my little chatbot project — i wanted to learn **LangGraph** and also ditch OpenAI for a bit, so i wired it up with **Google Gemini** instead.
+A stateful chatbot built with [LangGraph](https://langchain-ai.github.io/langgraph/) and Google Gemini. Conversation history is retained per thread, and the Streamlit UI supports selecting a model with automatic fallback when a quota limit is reached.
 
-it’s a stateful chat bot (yep, it remembers what you said earlier 🧠). nothing crazy fancy, just a clean tiny graph that actually works.
+## Features
 
-you can play with it two ways:
+1. LangGraph chat graph with in-memory checkpointing
+2. Streamlit web UI with model selection
+3. Automatic fallback across Gemini models on `429` / resource exhaustion
+4. Jupyter notebook walkthrough for learning the graph setup
 
-1. 📓 **Jupyter notebook** — best if you’re learning step by step → `langgraph_chatbot.ipynb`
-2. 🌐 **Streamlit UI** — nice little chat in the browser → `streamlit_app.py` + `langgraph_backend.py`
+## Project structure
 
----
-
-## ✨ what’s going on here?
-
-every message basically does this:
+| File | Description |
+| --- | --- |
+| `langgraph_chatbot.ipynb` | Step by step notebook for building and testing the graph |
+| `langgraph_backend.py` | Compiled LangGraph app, model list, and quota fallback logic |
+| `streamlit_app.py` | Browser chat interface |
+| `.env.example` | Template for `GOOGLE_API_KEY` |
+| `requirements.txt` | Python dependencies |
 
 ```text
-START → chat_node (Gemini) → END
+langgraph-gemini-chatbot/
+├── langgraph_chatbot.ipynb
+├── langgraph_backend.py
+├── streamlit_app.py
+├── requirements.txt
+├── .env.example
+├── .gitignore
+└── README.md
 ```
 
-super simple, right? but the cool part is the **checkpointer** — it keeps conversation history per `thread_id`, so follow-ups don’t feel dumb. you don’t have to resend the whole chat every time. love that.
+## Prerequisites
 
-oh and in the Streamlit app you can **pick a Gemini model** from a dropdown. if that one is out of quota (looking at you, 429 😤), it automatically tries the next models. lifesaver on the free tier.
+1. Python 3.10 or newer (`python3` on Linux)
+2. A Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey)
 
-| file | what it does |
-| --- | --- |
-| `langgraph_chatbot.ipynb` | walkthrough notebook — build the graph, poke at memory, chat loop |
-| `langgraph_backend.py` | the actual LangGraph brain (models + fallbacks live here) |
-| `streamlit_app.py` | browser UI with model picker |
-| `.env.example` | copy this → make your `.env` |
-| `requirements.txt` | all the python stuff |
-
----
-
-## 🧰 what you need
-
-- Python **3.10+** (on linux you might need `python3`, not `python` — yeah that got me once 😅)
-- a free Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey)
-
----
-
-## 🚀 setup (do this once)
+## Setup
 
 ```bash
 cd langgraph-gemini-chatbot
 
-# make a venv (please do this, future you will thank you)
 python3 -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 
 pip install -r requirements.txt
 
-# drop your key in
 cp .env.example .env
-# open .env and put: GOOGLE_API_KEY=your_real_key
+# Set GOOGLE_API_KEY in .env
 ```
 
-⚠️ don’t commit `.env`. it’s already in `.gitignore`. keep your secrets secret.
+Do not commit `.env`. It is listed in `.gitignore`.
 
----
-
-## 📓 run the notebook
-
-```bash
-jupyter notebook langgraph_chatbot.ipynb
-# or jupyter lab if that’s your vibe
-```
-
-run the cells top → bottom. there’s a smoke test, memory check, and an interactive loop. type `quit` when you’re done chatting.
-
-i left comments on basically every important line because past me always forgets *why* something exists.
-
----
-
-## 🌐 run the Streamlit app
-
-one liner after setup:
+## Run the Streamlit app
 
 ```bash
 streamlit run streamlit_app.py
 ```
 
-then open whatever url it prints (usually `http://localhost:8501`).
+Open the URL shown in the terminal (default: `http://localhost:8501`). Select a Gemini model from the dropdown, then send a message in the chat input.
 
-pick a model from the dropdown, type something, and you’re good. if your first pick is quota-blocked, the app hops to another model and tells you which one answered. pretty neat ✨
+## Run the notebook
 
----
+```bash
+jupyter notebook langgraph_chatbot.ipynb
+```
 
-## 🧠 how memory works (quick mental model)
+Execute cells from top to bottom. The notebook includes a smoke test, a memory check, and an interactive chat loop. Type `quit` to exit the loop.
+
+## Graph overview
+
+```text
+START → chat_node (Gemini) → END
+```
+
+The checkpointer stores state by `thread_id`, so follow-up messages keep prior context without resending the full history.
 
 ```python
 CONFIG = {
@@ -103,69 +89,33 @@ chatbot.invoke(
 )
 ```
 
-- `thread_id` = which chat bucket you’re in
-- same id → remembers previous turns
-- new id → fresh conversation, clean slate
-- `InMemorySaver` = stored in RAM only, so restarting the app = bye bye history (expected!)
+1. Same `thread_id` continues the conversation
+2. A new `thread_id` starts a fresh conversation
+3. `InMemorySaver` keeps state in RAM only; history is cleared when the process stops
 
----
+## Supported models
 
-## 🔁 models + fallback
+The app tries the selected model first. On quota errors it continues through the remaining list:
 
-right now the app knows about:
+1. `gemini-2.5-flash` (default)
+2. `gemini-2.5-flash-lite`
+3. `gemini-2.5-pro`
+4. `gemini-2.0-flash`
 
-- `gemini-2.5-flash` ← default, usually my go-to
-- `gemini-2.5-flash-lite`
-- `gemini-2.5-pro`
-- `gemini-2.0-flash` ← often dead on free tier (`limit: 0`), kept as last resort
+If a fallback model is used, the UI shows which model produced the reply.
 
-you pick one in the UI. if that model screams quota, we try the others automatically. no more staring at a giant red traceback every time google gets spicy.
+## Troubleshooting
 
----
-
-## 🆚 why gemini instead of openai?
-
-| old openai vibe | this project |
+| Issue | Resolution |
 | --- | --- |
-| `ChatOpenAI` | `ChatGoogleGenerativeAI` |
-| `OPENAI_API_KEY` | `GOOGLE_API_KEY` |
-| gpt models | gemini models |
+| `python: command not found` | Use `python3` |
+| `streamlit: command not found` | Activate the virtual environment and install requirements |
+| Authentication errors | Confirm `.env` exists and `GOOGLE_API_KEY` is valid |
+| `429 RESOURCE_EXHAUSTED` | Select another model; fallback should try the remaining options |
+| Model not found | Choose a model name available for your API key |
+| Notebook import errors | Use the same virtual environment kernel used for `pip install` |
+| History lost after restart | Expected with `InMemorySaver` |
 
-same LangGraph ideas (`StateGraph`, `add_messages`, checkpointer, streamlit history) — just swapped the LLM. that’s it.
+## License
 
----
-
-## 📁 project layout
-
-```text
-langgraph-gemini-chatbot/
-├── langgraph_chatbot.ipynb   # learn-by-doing path
-├── langgraph_backend.py      # graph + multi-model fallback
-├── streamlit_app.py          # chat UI
-├── requirements.txt
-├── .env.example
-├── .gitignore
-└── README.md                 # you are here 🙂
-```
-
----
-
-## 🩹 troubleshooting (stuff that bit me)
-
-| what went wrong | what fixed it |
-| --- | --- |
-| `python: command not found` | use `python3` |
-| `streamlit: command not found` | activate the venv + install requirements first |
-| auth / missing key errors | make sure `.env` exists and `GOOGLE_API_KEY` is real |
-| `429 RESOURCE_EXHAUSTED` / quota = 0 | switch model in the dropdown — fallback should kick in |
-| model 404 / not found | try another name from the list |
-| notebook can’t import stuff | use the same venv kernel you installed into |
-| bot “forgets” after restart | that’s `InMemorySaver` being honest — RAM only |
-
----
-
-## 📜 license / vibes
-
-educational / personal use. bring your own Gemini key and play nice with [Google’s AI terms](https://ai.google.dev/gemini-api/terms).
-
-have fun hacking on it ✌️
+For educational and personal use. Use your own Gemini API key and follow the [Google AI terms](https://ai.google.dev/gemini-api/terms).
